@@ -40,7 +40,7 @@ JNIEXPORT jint JNICALL Java_xerial_larray_impl_LArrayNative_copyFromArray
 
 
 
-JNIEXPORT jlong JNICALL Java_xerial_larray_impl_LArrayNative_mmap
+JNIEXPORT jlong JNICALL Java_xerial_larray_impl_LArrayNative_mmap__JIJJ
   (JNIEnv *env, jclass cls, jlong fd, jint mode, jlong offset, jlong size)
 {
 #if defined(_WIN32) || defined(_WIN64)
@@ -93,7 +93,61 @@ JNIEXPORT jlong JNICALL Java_xerial_larray_impl_LArrayNative_mmap
 #endif
 }
 
+JNIEXPORT jlong JNICALL Java_xerial_larray_impl_LArrayNative_mmap__IJJLjava_lang_String_2
+(JNIEnv* env, jclass cls, jint mode, jlong offset, jlong, jstring name) {
+#if defined(_WIN32) || defined(_WIN64)
+    void* mapAddress = 0;
+    jlong maxSize = offset + size;
+    jint lowLen = (jint)(maxSize);
+    jint highLen = (jint)(maxSize >> 32);
+    jint lowOffset = (jint)offset;
+    jint highOffset = (jint)(offset >> 32);
+    HANDLE fileHandle = (HANDLE)fd;
+    HANDLE mapping;
+    DWORD mapAccess = FILE_MAP_READ;
+    DWORD fileProtect = PAGE_READONLY;
+    BOOL result;
+    if (mode == 0) {
+        fileProtect = PAGE_READONLY;
+        mapAccess = FILE_MAP_READ;
+    }
+    else if (mode == 1) {
+        fileProtect = PAGE_READWRITE;
+        mapAccess = FILE_MAP_WRITE;
+    }
+    else if (mode == 2) {
+        fileProtect = PAGE_WRITECOPY;
+        mapAccess = FILE_MAP_COPY;
+    }
 
+    mapping = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, fileProtect, highLen, lowLen, name);
+    mapAddress = MapViewOfFile(mapping, mapAccess, highOffset, lowOffset, (size_t)size);
+
+    result = CloseHandle(mapping);
+    return (jlong)mapAddress;
+
+#else 
+    void* addr;
+    int prot = 0;
+    int flags = 0;
+    if (mode == 0) {
+        prot = PROT_READ;
+        flags = MAP_SHARED;
+    }
+    else if (mode == 1) {
+        prot = PROT_READ | PROT_WRITE;
+        flags = MAP_SHARED;
+    }
+    else if (mode == 2) {
+        prot = PROT_READ | PROT_WRITE;
+        flags = MAP_PRIVATE;
+    }
+
+    addr = mmap(0, size, prot, flags, (int)fd, offset);
+
+    return (jlong)addr;
+#endif
+}
 
 JNIEXPORT void JNICALL Java_xerial_larray_impl_LArrayNative_munmap
   (JNIEnv *env, jclass cls, jlong addr, jlong size) {
